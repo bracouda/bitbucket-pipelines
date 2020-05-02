@@ -1,0 +1,59 @@
+image: quay.io/quarkus/ubi-quarkus-native-image:20.0.0-java11
+build: &build
+  step:
+    name: build
+    script:
+      - ./mvnw -B package
+    caches:
+      - maven
+    artifacts:
+      - target/**
+
+test: &test
+  step:
+    name: test
+    caches:
+      - maven
+    script:
+      - ./mvnw -B test
+
+appengine: &appengine
+  script:
+    - cp -a src/main/appengine/* target/
+    - pipe: atlassian/google-app-engine-deploy:0.7.0
+      variables:
+        KEY_FILE: $KEY
+        PROJECT: $PROJECTNAME
+        DEPLOYABLES: 'target/app.yaml'
+        VERSION: '${BITBUCKET_BUILD_NUMBER}'
+        EXTRA_ARGS: '--verbosity=debug'
+
+deploy-manual: &deploy-manual
+  step:
+    name: manual-deployment
+    deployment: production
+    trigger: manual
+    <<: *appengine
+
+deploy: &deploy
+  step:
+    name: deployment
+    deployment: production
+    <<: *appengine
+
+
+pipelines:
+  default:
+    - <<: *build
+    - <<: *test
+  branches:
+    master:
+      - <<: *build
+      - <<: *test
+      - <<: *deploy-manual
+  tags:
+    '*':
+      - <<: *build
+      - <<: *test
+      - <<: *deploy
+
