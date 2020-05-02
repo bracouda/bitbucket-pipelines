@@ -1,0 +1,31 @@
+image: jojomi/hugo:latest
+
+build: &build
+  step:
+    name: build
+    script:
+      - hugo -D
+    artifacts:
+      - public/**
+
+push-prod: &push-prod
+  step:
+    name: deployment
+    deployment: production
+    script:
+      - pipe: atlassian/ftp-deploy:0.3.2
+        variables:
+          USER: $USER
+          SERVER: $SFTP
+          REMOTE_PATH: '/www/'
+          LOCAL_PATH: 'public/'
+          PASSWORD: $PASSWORD
+          DEBUG: 'true'
+
+pipelines:
+  default:
+    - <<: *build
+  branches:
+    master:
+      - <<: *build
+      - <<: *push-prod
