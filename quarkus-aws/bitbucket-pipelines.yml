@@ -1,0 +1,61 @@
+image: quay.io/quarkus/ubi-quarkus-native-image:20.0.0-java11
+build: &build
+  step:
+    name: build
+    script:
+      - ./mvnw -B package  -Dquarkus.package.uber-jar=true
+    caches:
+      - maven
+    artifacts:
+      - target/**
+
+test: &test
+  step:
+    name: test
+    caches:
+      - maven
+    script:
+      - ./mvnw -B test
+
+aws: &aws
+  script:
+    - cp target/quarkus-aws-runner.jar target/quarkus-aws-${BITBUCKET_BUILD_NUMBER}-runner.jar
+    - pipe: atlassian/aws-elasticbeanstalk-deploy:0.5.0
+      variables:
+        AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+        AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+        AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+        APPLICATION_NAME: "quarkus-aws"
+        ENVIRONMENT_NAME: 'prod'
+        S3_BUCKET: $AWS_S3
+        ZIP_FILE: "target/quarkus-aws-${BITBUCKET_BUILD_NUMBER}-runner.jar"
+        VERSION_LABEL: 'quarkus-aws-$BITBUCKET_BUILD_NUMBER'
+
+deploy-manual: &deploy-manual
+  step:
+    name: manual-deployment
+    deployment: production
+    trigger: manual
+    <<: *aws
+
+deploy: &deploy
+  step:
+    name: deployment
+    deployment: production
+    <<: *aws
+
+
+pipelines:
+  default:
+    - <<: *build
+    - <<: *test
+  branches:
+    master:
+      - <<: *build
+      - <<: *test
+      - <<: *deploy-manual
+  tags:
+    '*':
+      - <<: *build
+      - <<: *test
+      - <<: *deploy
